@@ -282,7 +282,7 @@ void handleLoginPage() {
   // Halaman login sederhana (GET)
   String html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>";
   html += "<title>Login</title><style>body{font-family:Arial;padding:20px;text-align:center}input{padding:10px;margin:8px;width:90%}button{padding:12px;margin-top:8px;width:95%}</style></head><body>";
-  html += "<h2>Login Web UI</h2>";
+  html += "<h2>Keyless Emergency</h2>";
   html += "<form action='/doLogin' method='GET'>";
   html += "<input name='user' placeholder='user' autofocus><br>";
   html += "<input name='pass' placeholder='password' type='password'><br>";
@@ -433,7 +433,7 @@ void handleRoot() {
   html += "a.btn{color:#fff;padding:8px 10px;border-radius:6px;text-decoration:none}";
   html += "</style></head><body>";
 
-  html += "<div class='toprow'><div class='left'><h2>🔑 ESP32 Keyless Control</h2></div>";
+  html += "<div class='toprow'><div class='left'><h2>🔑 ESP32 Keyless Emergency</h2></div>";
   html += "<div class='right'><a href='/changePass' class='btn sec'>Ganti Password</a> &nbsp; <a href='/logout' class='btn sec'>Logout</a></div></div>";
 
   // Tampilkan info koneksi dan kedua opsi akses (IP + mDNS jika ada)
@@ -444,18 +444,18 @@ void handleRoot() {
     html += "<div class='info' style='font-size:0.85em;color:#888'>Domain lokal (keyless.local) hanya tersedia saat perangkat tersambung ke jaringan WiFi Anda.</div>";
   }
 
-  html += "<div class='status'>Mode: " + controlMode + " &nbsp; | &nbsp; Relay: " + String(relayState ? "ON" : "OFF") + "</div>";
+  html += "<div class='status'>Keyless: " + controlMode + " &nbsp; | &nbsp; Keyless: " + String(relayState ? "ON" : "OFF") + "</div>";
 
   // Tombol mode (AUTO / MANUAL)
   html += "<div class='container'>";
-  html += "<form action='/setMode'><button class='mode' name='mode' value='AUTO' type='submit'>Mode AUTO</button></form>";
-  html += "<form action='/setMode'><button class='mode' name='mode' value='MANUAL' type='submit'>Mode MANUAL</button></form>";
+  html += "<form action='/setMode'><button class='mode' name='mode' value='AUTO' type='submit'>Keyless AUTO</button></form>";
+  html += "<form action='/setMode'><button class='mode' name='mode' value='MANUAL' type='submit'>Keyless MANUAL</button></form>";
   html += "</div>";
 
   // Tombol relay (aktif hanya jika MANUAL)
   html += "<div class='container'>";
-  html += "<form action='/relay'><button class='on' name='state' value='ON' type='submit'>Relay ON</button></form>";
-  html += "<form action='/relay'><button class='off' name='state' value='OFF' type='submit'>Relay OFF</button></form>";
+  html += "<form action='/relay'><button class='on' name='state' value='ON' type='submit'>Keyless ON</button></form>";
+  html += "<form action='/relay'><button class='off' name='state' value='OFF' type='submit'>Keyless OFF</button></form>";
   html += "</div>";
 
   // Tampilkan log terakhir
