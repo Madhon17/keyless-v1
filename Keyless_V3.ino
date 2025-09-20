@@ -282,13 +282,13 @@ void handleLoginPage() {
   // Halaman login sederhana (GET)
   String html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>";
   html += "<title>Login</title><style>body{font-family:Arial;padding:20px;text-align:center}input{padding:10px;margin:8px;width:90%}button{padding:12px;margin-top:8px;width:95%}</style></head><body>";
-  html += "<h2>Keyless Emergency</h2>";
+  html += "<h2>🔑 Keyless Emergency 🔑</h2>";
   html += "<form action='/doLogin' method='GET'>";
   html += "<input name='user' placeholder='user' autofocus><br>";
   html += "<input name='pass' placeholder='password' type='password'><br>";
   html += "<button type='submit'>Login</button>";
   html += "</form>";
-  html += "<p>Default: <b>admin</b> / <b>1234</b></p>";
+  //html += "<p>Default: <b>admin</b> / <b>1234</b></p>";
   html += "</body></html>";
   server.send(200, "text/html", html);
 }
@@ -433,7 +433,7 @@ void handleRoot() {
   html += "a.btn{color:#fff;padding:8px 10px;border-radius:6px;text-decoration:none}";
   html += "</style></head><body>";
 
-  html += "<div class='toprow'><div class='left'><h2>🔑 ESP32 Keyless Emergency</h2></div>";
+  html += "<div class='toprow'><div class='left'><h2>🔑 ESP32 Keyless Emergency 🔑</h2></div>";
   html += "<div class='right'><a href='/changePass' class='btn sec'>Ganti Password</a> &nbsp; <a href='/logout' class='btn sec'>Logout</a></div></div>";
 
   // Tampilkan info koneksi dan kedua opsi akses (IP + mDNS jika ada)
