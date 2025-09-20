@@ -4,7 +4,6 @@
 #include <BLEAdvertisedDevice.h>
 #include <WiFi.h>
 #include <time.h>
-#include <WebServer.h>
 
 // ================== KONFIGURASI PIN ==================
 #define RELAY_PIN    33   // Relay aktif LOW
@@ -26,15 +25,13 @@ int deviceCount = 0;
 
 // ================== VARIABEL GLOBAL ==================
 BLEScan* pBLEScan;
-bool relayState = false;
-bool buzzerBeeped[MAX_DEVICES];
+bool relayState = false;               
+bool buzzerBeeped[MAX_DEVICES];        
 bool deviceDetected = false;           // device resmi terdeteksi untuk relay ON
 int lastBeepSecond = -1;               // detik terakhir beep countdown
 bool timeSynced = false;
 const char* NTP_SERVER = "pool.ntp.org";
 const int WIFI_CONNECT_TIMEOUT_MS = 8000;
-
-WebServer server(80); // Simple web server
 
 // ================== FUNGSI SIMPAN / LOAD DEVICE ==================
 void loadDevices() {
@@ -64,7 +61,6 @@ void saveDevices() {
 // ================== FUNGSI RELAY ==================
 void setRelay(bool state) {
   relayState = state;
-  // Relay aktif LOW => LOW = ON, HIGH = OFF
   digitalWrite(RELAY_PIN, state ? LOW : HIGH);
   digitalWrite(LED_PIN, state ? HIGH : LOW);
 }
@@ -137,7 +133,7 @@ bool connectWiFi(const String &ssid, const String &pass) {
     }
     delay(200);
   }
-  Serial.println("❌ Gagal konekWiFi (timeout)");
+  Serial.println("❌ Gagal konek WiFi (timeout)");
   return false;
 }
 
@@ -163,7 +159,7 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
     String addr = advertisedDevice.getAddress().toString().c_str();
     for (int i = 0; i < deviceCount; i++) {
       if (addr.equalsIgnoreCase(devices[i])) {
-        lastSeenDevices[i] = millis();
+        lastSeenDevices[i] = millis(); 
         break;
       }
     }
@@ -238,143 +234,6 @@ void handleSerialCommand() {
   else Serial.println("⚠️ Perintah tidak dikenali. Gunakan: add/remove/list/wifi/clearwifi");
 }
 
-// ================== WEB HANDLER ==================
-String htmlPage() {
-  String html = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>";
-  html += "<title>ESP32 Keyless - Web UI</title>";
-  html += "<style>body{font-family:sans-serif;padding:10px;max-width:800px;margin:auto}button{padding:10px;margin:5px}input{padding:6px;margin:5px}</style></head><body>";
-  html += "<h2>ESP32 Keyless - Web UI</h2>";
-  html += "<div><strong>Relay:</strong> <span id='relayState'>...</span> ";
-  html += "<button onclick=\"toggleRelay('on')\">ON</button><button onclick=\"toggleRelay('off')\">OFF</button></div>";
-  html += "<div><strong>IP:</strong> <span id='ip'>...</span></div>";
-  html += "<hr>";
-  html += "<h3>Device Terdaftar</h3>";
-  html += "<div id='deviceList'>Loading...</div>";
-  html += "<h4>Tambah Device</h4>";
-  html += "<input id='mac' placeholder='AA:BB:CC:DD:EE:FF' /> <button onclick='addDevice()'>Add</button>";
-  html += "<h4>WiFi (simpan & connect)</h4>";
-  html += "<input id='ssid' placeholder='SSID' /> <input id='pass' placeholder='PASSWORD' /> <button onclick='saveWifi()'>Save & Connect</button>";
-  html += "<script>";
-  html += "async function fetchJSON(path){let r=await fetch(path);return r.text();}";
-  html += "async function load(){ document.getElementById('deviceList').innerText='Loading...'; let s=await fetch('/devices'); let j=await s.json(); if(j.length==0) document.getElementById('deviceList').innerText='(kosong)'; else{ let html=''; j.forEach((d,i)=>{ html+='<div>'+ (i+1) +'. '+ d + ' <button onclick=\"removeDevice(\\''+d+'\\')\">Remove</button></div>'; }); document.getElementById('deviceList').innerHTML=html; } let st=await fetch('/status'); let js=await st.json(); document.getElementById('relayState').innerText = js.relay ? 'ON' : 'OFF'; document.getElementById('ip').innerText = js.ip; }";
-  html += "async function addDevice(){ let mac=document.getElementById('mac').value.trim(); if(!mac) return alert('Isi MAC'); let r=await fetch('/add?mac='+encodeURIComponent(mac)); alert(await r.text()); load(); }";
-  html += "async function removeDevice(mac){ if(!confirm('Hapus '+mac+' ?')) return; let r=await fetch('/remove?mac='+encodeURIComponent(mac)); alert(await r.text()); load(); }";
-  html += "async function toggleRelay(state){ let r=await fetch('/relay?state='+state); alert(await r.text()); load(); }";
-  html += "async function saveWifi(){ let ssid=document.getElementById('ssid').value; let pass=document.getElementById('pass').value; if(!ssid) return alert('SSID kosong'); let r=await fetch('/savewifi?ssid='+encodeURIComponent(ssid)+'&pass='+encodeURIComponent(pass)); alert(await r.text()); }";
-  html += "load(); setInterval(load,7000);";
-  html += "</script></body></html>";
-  return html;
-}
-
-void handleRoot() {
-  server.send(200, "text/html", htmlPage());
-}
-
-void handleListDevices() {
-  String json = "[";
-  for (int i = 0; i < deviceCount; i++) {
-    json += "\"" + devices[i] + "\"";
-    if (i < deviceCount - 1) json += ",";
-  }
-  json += "]";
-  server.send(200, "application/json", json);
-}
-
-void handleAddDevice() {
-  if (!server.hasArg("mac")) {
-    server.send(400, "text/plain", "Parameter 'mac' required");
-    return;
-  }
-  String mac = server.arg("mac");
-  mac.trim();
-  if (mac.length() == 0) {
-    server.send(400, "text/plain", "MAC kosong");
-    return;
-  }
-  bool exists = false;
-  for (int i = 0; i < deviceCount; i++) if (devices[i].equalsIgnoreCase(mac)) exists = true;
-  if (!exists && deviceCount < MAX_DEVICES) {
-    devices[deviceCount] = mac;
-    lastSeenDevices[deviceCount] = 0;
-    buzzerBeeped[deviceCount] = false;
-    deviceCount++;
-    saveDevices();
-    server.send(200, "text/plain", "✅ Device ditambahkan: " + mac);
-  } else {
-    server.send(400, "text/plain", "⚠️ Device sudah ada atau slot penuh");
-  }
-}
-
-void handleRemoveDevice() {
-  if (!server.hasArg("mac")) {
-    server.send(400, "text/plain", "Parameter 'mac' required");
-    return;
-  }
-  String mac = server.arg("mac");
-  mac.trim();
-  bool found = false;
-  for (int i = 0; i < deviceCount; i++) {
-    if (devices[i].equalsIgnoreCase(mac)) {
-      for (int j = i; j < deviceCount - 1; j++) {
-        devices[j] = devices[j + 1];
-        lastSeenDevices[j] = lastSeenDevices[j + 1];
-        buzzerBeeped[j] = buzzerBeeped[j + 1];
-      }
-      deviceCount--;
-      saveDevices();
-      found = true;
-      server.send(200, "text/plain", "🗑️ Device dihapus: " + mac);
-      break;
-    }
-  }
-  if (!found) server.send(404, "text/plain", "⚠️ Device tidak ditemukan");
-}
-
-void handleRelayControl() {
-  if (!server.hasArg("state")) {
-    server.send(400, "text/plain", "Parameter 'state' required");
-    return;
-  }
-  String s = server.arg("state");
-  s.toLowerCase();
-  if (s == "on") {
-    setRelay(true);
-    deviceDetected = true; // manual override considered detected
-    server.send(200, "text/plain", "✅ Relay di-ON-kan");
-  } else if (s == "off") {
-    setRelay(false);
-    deviceDetected = false;
-    server.send(200, "text/plain", "✅ Relay di-OFF-kan");
-  } else server.send(400, "text/plain", "State harus 'on' atau 'off'");
-}
-
-void handleStatus() {
-  String json = "{";
-  json += "\"relay\":" + String(relayState ? "true" : "false") + ",";
-  json += "\"time\":\"" + getTimeStamp() + "\",";
-  String ip = (WiFi.getMode() & WIFI_STA) && WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
-  json += "\"ip\":\"" + ip + "\"";
-  json += "}";
-  server.send(200, "application/json", json);
-}
-
-void handleSaveWifi() {
-  if (!server.hasArg("ssid") || !server.hasArg("pass")) {
-    server.send(400, "text/plain", "ssid & pass diperlukan");
-    return;
-  }
-  String ssid = server.arg("ssid");
-  String pass = server.arg("pass");
-  saveWifiCredentials(ssid, pass);
-  bool ok = connectWiFi(ssid, pass);
-  if (ok) {
-    startNTP();
-    server.send(200, "text/plain", "✅ Kredensial disimpan dan terhubung");
-  } else {
-    server.send(200, "text/plain", "⚠️ Kredensial disimpan tetapi gagal konek (cek SSID/password)");
-  }
-}
-
 // ================== SETUP ==================
 void setup() {
   Serial.begin(115200);
@@ -383,7 +242,6 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
 
-  // pastikan relay OFF saat boot
   digitalWrite(RELAY_PIN, HIGH);
   digitalWrite(LED_PIN, LOW);
   digitalWrite(BUZZER_PIN, LOW);
@@ -400,26 +258,11 @@ void setup() {
 
   Serial.println("⚡ ESP32 siap. Mode standby: menunggu device BLE terdaftar...");
 
-  bool wifiOk = connectWiFiFromPrefs();
-  if (wifiOk) {
-    startNTP();
-    Serial.println("📡 Web UI akan aktif di IP: " + WiFi.localIP().toString());
-  } else {
-    Serial.println("ℹ️ Tidak ada kredensial WiFi di NVS. Membuat Access Point 'ESP32-Setup' ...");
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP("ESP32-Setup");
-    Serial.println("📡 Web UI (AP) tersedia di 192.168.4.1");
+  if (connectWiFiFromPrefs()) startNTP();
+  else {
+    Serial.println("ℹ️ Tidak ada kredensial WiFi di NVS. Gunakan perintah:");
+    Serial.println("   wifi <SSID> <PASSWORD>");
   }
-
-  // Setup routes
-  server.on("/", HTTP_GET, handleRoot);
-  server.on("/devices", HTTP_GET, handleListDevices);
-  server.on("/add", HTTP_GET, handleAddDevice);
-  server.on("/remove", HTTP_GET, handleRemoveDevice);
-  server.on("/relay", HTTP_GET, handleRelayControl);
-  server.on("/status", HTTP_GET, handleStatus);
-  server.on("/savewifi", HTTP_GET, handleSaveWifi);
-  server.begin();
 
   Serial.println("\n=== MODE SERIAL ===");
   Serial.println("Gunakan perintah:");
@@ -435,10 +278,6 @@ void setup() {
 void loop() {
   handleSerialCommand();
 
-  // handle web requests
-  server.handleClient();
-
-  // BLE scan (blocking as sebelumnya)
   pBLEScan->start(SCAN_TIME_SEC, false);
   pBLEScan->clearResults();
 
