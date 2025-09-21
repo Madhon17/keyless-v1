@@ -411,7 +411,7 @@ void handleRoot() {
 
   // Build halaman HTML responsif (mirip V2) + link PWA & change password
   String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>";
-  html += "<title>ESP32 Control</title>";
+  html += "<title>Keyless Management</title>";
   // PWA manifest + sw register
   html += "<link rel='manifest' href='/manifest.json'>";
   html += "<meta name='theme-color' content='#007bff'/>";
@@ -451,14 +451,14 @@ void handleRoot() {
 
   // Tombol mode (AUTO / MANUAL)
   html += "<div class='container'>";
-  html += "<form action='/setMode'><button class='mode' name='mode' value='AUTO' type='submit'>Keyless AUTO</button></form>";
-  html += "<form action='/setMode'><button class='mode' name='mode' value='MANUAL' type='submit'>Keyless MANUAL</button></form>";
+  html += "<form action='/setMode'><button class='mode' name='mode' value='AUTO' type='submit'>AUTO</button></form>";
+  html += "<form action='/setMode'><button class='mode' name='mode' value='MANUAL' type='submit'>MANUAL</button></form>";
   html += "</div>";
 
   // Tombol relay (aktif hanya jika MANUAL)
   html += "<div class='container'>";
-  html += "<form action='/relay'><button class='on' name='state' value='ON' type='submit'>Keyless ON</button></form>";
-  html += "<form action='/relay'><button class='off' name='state' value='OFF' type='submit'>Keyless OFF</button></form>";
+  html += "<form action='/relay'><button class='on' name='state' value='ON' type='submit'>ON</button></form>";
+  html += "<form action='/relay'><button class='off' name='state' value='OFF' type='submit'>OFF</button></form>";
   html += "</div>";
 
   // Tampilkan log terakhir
@@ -516,11 +516,11 @@ void handleRelay() {
     if (s == "ON") {
       setRelay(true);
       addLog("Relay di-ON-kan (manual)");
-      Serial.println(getTimeStamp() + " 🔧 Relay ON (manual)");
+      Serial.println(getTimeStamp() + " 🔧 Keyless ON (manual)");
     } else {
       setRelay(false);
       addLog("Relay di-OFF-kan (manual)");
-      Serial.println(getTimeStamp() + " 🔧 Relay OFF (manual)");
+      Serial.println(getTimeStamp() + " 🔧 Keyless OFF (manual)");
     }
   }
   server.sendHeader("Location", "/");
@@ -927,8 +927,8 @@ void loop() {
           setRelay(true);
           deviceDetected = true;
           buzzerBeepShort();
-          addLog("Relay ON (BLE detected) - " + devices[i]);
-          Serial.println(getTimeStamp() + " 📡 Device resmi terdeteksi → Relay ON");
+          addLog("Keyless ON (BLE detected) - " + devices[i]);
+          Serial.println(getTimeStamp() + " 📡 Device resmi terdeteksi → Keyless ON");
         }
         break;
       }
@@ -947,7 +947,7 @@ void loop() {
           digitalWrite(BUZZER_PIN, HIGH);
           delay(100);
           digitalWrite(BUZZER_PIN, LOW);
-          Serial.println(getTimeStamp() + " ⏰ Warning: countdown sebelum Relay OFF (detik " + String(lostSec) + ")");
+          Serial.println(getTimeStamp() + " ⏰ Warning: countdown sebelum Keyless OFF (detik " + String(lostSec) + ")");
         }
 
         if (lostDuration >= RELAY_HYSTERESIS_MS) {
@@ -958,13 +958,13 @@ void loop() {
           deviceDetected = false;
           for (int i = 0; i < deviceCount; i++) buzzerBeeped[i] = false;
           lastBeepSecond = -1;
-          addLog("Relay OFF (BLE lost - auto)");
-          Serial.println(getTimeStamp() + " ⏹ Semua device hilang → Relay OFF");
+          addLog("Keyless OFF (BLE lost - auto)");
+          Serial.println(getTimeStamp() + " ⏹ Semua device hilang → Keyless OFF");
         }
       } else {
         setRelay(false);
         deviceDetected = false;
-        addLog("Relay OFF (BLE lost - no record)");
+        addLog("Keyless OFF (BLE lost - no record)");
       }
     }
   } // end AUTO
