@@ -506,8 +506,8 @@ void handleRelay() {
   if (!requireAuth()) return;
 
   if (controlMode != "MANUAL") {
-    addLog("Percobaan kontrol relay ditolak (mode bukan MANUAL)");
-    server.send(200, "text/plain", "Relay hanya bisa dikontrol saat mode MANUAL aktif. Kembali ke halaman utama.");
+    addLog("Percobaan kontrol keyless ditolak (mode bukan MANUAL)");
+    server.send(200, "text/plain", "keyless hanya bisa dikontrol saat mode MANUAL aktif. Kembali ke halaman utama.");
     return;
   }
 
@@ -515,11 +515,11 @@ void handleRelay() {
     String s = server.arg("state");
     if (s == "ON") {
       setRelay(true);
-      addLog("Relay di-ON-kan (manual)");
+      addLog("keyless di-ON-kan (manual)");
       Serial.println(getTimeStamp() + " 🔧 Keyless ON (manual)");
     } else {
       setRelay(false);
-      addLog("Relay di-OFF-kan (manual)");
+      addLog("keyless di-OFF-kan (manual)");
       Serial.println(getTimeStamp() + " 🔧 Keyless OFF (manual)");
     }
   }
