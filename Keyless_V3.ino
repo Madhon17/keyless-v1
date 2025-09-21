@@ -1,11 +1,13 @@
 /*
   KODE FINAL V3 (dimodifikasi: tambahkan opsi akses IP + domain local mDNS)
-  - Basis: KODE FINAL V2 (AUTO/MANUAL, responsive UI, buzzer, WiFi/IP, log, login sederhana)
+  - Basis: KODE FINAL V3 (AUTO/MANUAL, responsive UI, buzzer, WiFi/IP, log, login sederhana)
   - Tambahan:
     * Login lebih aman: password di-hash (SHA-256) dan disimpan di NVS; bisa diganti via Web UI
     * Session token (cookie) in-memory untuk autentikasi
     * PWA support: /manifest.json & /sw.js (service worker)
     * mDNS: akses domain local "keyless.local" ketika WiFi STA berhasil terhubung
+    * Web UI: add/remove/list devices, wifi set/clear
+    * add scan MAC BLE Automatis WEBUI " dekatkan perangkat ke esp32 selama 5 detik, nanti akan ada notif mac address" 
   - Komentar dalam Bahasa Indonesia
 */
 
@@ -400,9 +402,7 @@ void handleRoot() {
   if ((WiFi.getMode() & WIFI_STA) && WiFi.status() == WL_CONNECTED) {
     ip = WiFi.localIP().toString();
     wifiStat = "Connected";
-    // cek apakah mDNS seharusnya aktif (MDNS.begin telah dipanggil di setup)
-    // kita anggap jika hostname resolvable maka tampilkan opsi domain
-    mdnsAvailable = true; // menandakan kita menampilkan opsi keyless.local bila STA connected
+    mdnsAvailable = true;
   } else {
     ip = WiFi.softAPIP().toString();
     wifiStat = "AP Mode";
@@ -435,6 +435,9 @@ void handleRoot() {
 
   html += "<div class='toprow'><div class='left'><h2>🔑 ESP32 Keyless Emergency 🔑</h2></div>";
   html += "<div class='right'><a href='/changePass' class='btn sec'>Ganti Password</a> &nbsp; <a href='/logout' class='btn sec'>Logout</a></div></div>";
+
+  // Link ke Devices & Wifi pages
+  html += "<div style='margin-top:8px;'><a href='/devices' class='btn sec' style='margin-right:8px'>Kelola Devices</a><a href='/wifi' class='btn sec'>WiFi Config</a></div>";
 
   // Tampilkan info koneksi dan kedua opsi akses (IP + mDNS jika ada)
   html += "<div class='info'>WiFi: " + wifiStat + " &nbsp; | &nbsp; IP: " + ip + "</div>";
@@ -524,6 +527,220 @@ void handleRelay() {
   server.send(303);
 }
 
+// ================== HANDLER: Devices Page (list + add form + remove) ==================
+// ================== HANDLER: Scan Nearest BLE Device ==================
+void handleScanNearestMac() {
+  if (!requireAuth()) return;
+
+  int scanTime = 5; // detik
+  BLEScanResults foundDevices = pBLEScan->start(scanTime, false);
+  int bestRSSI = -999;
+  String bestMAC = "";
+
+  for (int i = 0; i < foundDevices.getCount(); i++) {
+    BLEAdvertisedDevice dev = foundDevices.getDevice(i);
+    int rssi = dev.getRSSI();
+    String mac = dev.getAddress().toString().c_str();
+
+    if (rssi > bestRSSI) {
+      bestRSSI = rssi;
+      bestMAC = mac;
+    }
+  }
+  pBLEScan->clearResults();
+
+  if (bestMAC.length() > 0) {
+    server.send(200, "text/plain", bestMAC);
+  } else {
+    server.send(200, "text/plain", "");
+  }
+}
+
+// ================== UPDATE handleDevicesPage ==================
+void handleDevicesPage() {
+  if (!requireAuth()) return;
+
+  String html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>";
+  html += "<title>Kelola Devices</title><style>body{font-family:Arial;padding:16px}input{padding:8px;width:70%;}button{padding:10px;margin:6px;}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #ddd;text-align:left} .small{font-size:0.9em;color:#666}</style></head><body>";
+  html += "<h2>Kelola Devices BLE</h2>";
+  html += "<p class='small'>Tambahkan MAC address device iTag (format: AA:BB:CC:DD:EE:FF)</p>";
+
+  // Form add device + tombol scan
+  html += "<form action='/doAddDevice' method='GET'>";
+  html += "<input id='macInput' name='mac' placeholder='MAC address (contoh: AA:BB:CC:DD:EE:FF)'> ";
+  html += "<button type='submit'>Tambah Device</button>";
+  html += "<button type='button' onclick='scanMac()'>Scan MAC Terdekat</button>";
+  html += "</form>";
+
+  // Script untuk isi otomatis
+  html += "<script>";
+  html += "function scanMac(){";
+  html += "fetch('/scanNearestMac').then(r=>r.text()).then(mac=>{";
+  html += " if(mac){document.getElementById('macInput').value = mac; alert('Ditemukan: '+mac);} else {alert('Tidak ada device terdeteksi');}";
+  html += "});}";
+  html += "</script>";
+
+  // Tampilkan daftar
+  html += "<h3>Daftar Terdaftar (" + String(deviceCount) + ")</h3>";
+  html += "<table><tr><th>No</th><th>MAC</th><th>Aksi</th></tr>";
+  if (deviceCount == 0) {
+    html += "<tr><td colspan='3'>(kosong)</td></tr>";
+  } else {
+    for (int i = 0; i < deviceCount; i++) {
+      html += "<tr><td>" + String(i+1) + "</td><td>" + devices[i] + "</td>";
+      html += "<td><a href='/doRemoveDevice?mac=" + devices[i] + "'><button>Hapus</button></a></td></tr>";
+    }
+  }
+  html += "</table>";
+  html += "<p><a href='/'>Kembali</a></p>";
+  html += "</body></html>";
+
+  server.send(200, "text/html", html);
+}
+
+
+void handleDoAddDevice() {
+  if (!requireAuth()) return;
+
+  if (!server.hasArg("mac")) {
+    server.send(400, "text/plain", "mac required");
+    return;
+  }
+  String mac = server.arg("mac");
+  mac.trim();
+  if (mac.length() == 0) {
+    server.send(400, "text/plain", "mac empty");
+    return;
+  }
+  // Cek sudah ada?
+  bool exists = false;
+  for (int i = 0; i < deviceCount; i++) if (devices[i].equalsIgnoreCase(mac)) exists = true;
+  if (exists) {
+    addLog("Percobaan tambah device (sudah ada): " + mac);
+    server.sendHeader("Location", "/devices");
+    server.send(303);
+    return;
+  }
+  if (deviceCount >= MAX_DEVICES) {
+    addLog("Percobaan tambah device gagal (penuh): " + mac);
+    server.sendHeader("Location", "/devices");
+    server.send(303);
+    return;
+  }
+  devices[deviceCount] = mac;
+  lastSeenDevices[deviceCount] = 0;
+  buzzerBeeped[deviceCount] = false;
+  deviceCount++;
+  saveDevices();
+  addLog("Device ditambahkan (web): " + mac);
+  Serial.println("✅ Device ditambahkan (web): " + mac);
+  server.sendHeader("Location", "/devices");
+  server.send(303);
+}
+
+void handleDoRemoveDevice() {
+  if (!requireAuth()) return;
+
+  if (!server.hasArg("mac")) {
+    server.send(400, "text/plain", "mac required");
+    return;
+  }
+  String mac = server.arg("mac");
+  mac.trim();
+  bool found = false;
+  for (int i = 0; i < deviceCount; i++) {
+    if (devices[i].equalsIgnoreCase(mac)) {
+      for (int j = i; j < deviceCount - 1; j++) {
+        devices[j] = devices[j + 1];
+        lastSeenDevices[j] = lastSeenDevices[j + 1];
+        buzzerBeeped[j] = buzzerBeeped[j + 1];
+      }
+      deviceCount--;
+      saveDevices();
+      found = true;
+      addLog("Device dihapus (web): " + mac);
+      Serial.println("🗑️ Device dihapus (web): " + mac);
+      break;
+    }
+  }
+  if (!found) {
+    addLog("Percobaan hapus device gagal (tidak ditemukan): " + mac);
+  }
+  server.sendHeader("Location", "/devices");
+  server.send(303);
+}
+
+// ================== HANDLER: WiFi config page & actions ==================
+void handleWifiPage() {
+  if (!requireAuth()) return;
+
+  // ambil current wifi creds (tampil ssid saja, password kosong)
+  preferences.begin("wifi", true);
+  String ssid = preferences.getString("ssid", "");
+  preferences.end();
+
+  String html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>";
+  html += "<title>WiFi Config</title><style>body{font-family:Arial;padding:16px}input{padding:8px;width:80%;}button{padding:10px;margin:6px;} .small{font-size:0.9em;color:#666}</style></head><body>";
+  html += "<h2>Konfigurasi WiFi</h2>";
+  html += "<p class='small'>Masukkan SSID dan Password jaringan Anda. Setelah simpan, ESP akan mencoba menghubungkan. Jika berhasil, mDNS (keyless.local) akan aktif.</p>";
+  html += "<form action='/doWifiSave' method='GET'>";
+  html += "<input name='ssid' placeholder='SSID' value='" + ssid + "'><br><br>";
+  html += "<input name='pass' placeholder='Password' type='password'><br><br>";
+  html += "<button type='submit'>Simpan & Hubungkan</button>";
+  html += "</form>";
+  html += "<form action='/doClearWifi' method='GET' style='margin-top:12px;'><button type='submit'>Clear WiFi (hapus kredensial)</button></form>";
+  html += "<p><a href='/'>Kembali</a></p>";
+  html += "</body></html>";
+
+  server.send(200, "text/html", html);
+}
+
+void handleDoWifiSave() {
+  if (!requireAuth()) return;
+  if (!server.hasArg("ssid") || !server.hasArg("pass")) {
+    server.send(400, "text/plain", "ssid & pass required");
+    return;
+  }
+  String ssid = server.arg("ssid"); ssid.trim();
+  String pass = server.arg("pass"); pass.trim();
+  if (ssid.length() == 0) {
+    server.send(400, "text/plain", "ssid empty");
+    return;
+  }
+  preferences.begin("wifi", false);
+  preferences.putString("ssid", ssid);
+  preferences.putString("pass", pass);
+  preferences.end();
+  addLog("Kredensial WiFi disimpan via Web UI: " + ssid);
+  Serial.println("✅ Kredensial WiFi disimpan. Mencoba koneksi...");
+  // coba koneksi sekarang
+  if (connectWiFiFromPrefs()) {
+    startNTP();
+    addLog("WiFi terhubung via Web UI: " + WiFi.localIP().toString());
+    startMDNS();
+  } else {
+    addLog("Kredensial WiFi disimpan tetapi gagal konek: " + ssid);
+    Serial.println("⚠️ Koneksi WiFi gagal. Periksa SSID/password.");
+  }
+  server.sendHeader("Location", "/wifi");
+  server.send(303);
+}
+
+void handleDoClearWifi() {
+  if (!requireAuth()) return;
+  preferences.begin("wifi", false);
+  preferences.remove("ssid");
+  preferences.remove("pass");
+  preferences.end();
+  addLog("Kredensial WiFi dihapus via Web UI");
+  Serial.println("✅ Kredensial WiFi dihapus dari NVS (via Web UI)");
+  // hentikan mDNS bila berjalan
+  stopMDNSIfRunning();
+
+  server.sendHeader("Location", "/wifi");
+  server.send(303);
+}
+
 // ================== SETUP ==================
 void setup() {
   Serial.begin(115200);
@@ -593,6 +810,15 @@ void setup() {
   server.on("/", HTTP_GET, handleRoot);
   server.on("/setMode", HTTP_GET, handleSetMode);
   server.on("/relay", HTTP_GET, handleRelay);
+
+  // NEW: Devices & WiFi routes (Web UI)
+  server.on("/devices", HTTP_GET, handleDevicesPage);
+  server.on("/doAddDevice", HTTP_GET, handleDoAddDevice);
+  server.on("/doRemoveDevice", HTTP_GET, handleDoRemoveDevice);
+  server.on("/wifi", HTTP_GET, handleWifiPage);
+  server.on("/doWifiSave", HTTP_GET, handleDoWifiSave);
+  server.on("/doClearWifi", HTTP_GET, handleDoClearWifi);
+  server.on("/scanNearestMac", handleScanNearestMac);
 
   server.begin();
   Serial.println("\n=== MODE SERIAL ===");
