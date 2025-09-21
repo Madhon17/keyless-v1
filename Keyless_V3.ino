@@ -302,15 +302,18 @@ void handleDoLogin() {
   }
   String u = server.arg("user");
   String p = server.arg("pass");
-  // hanya user 'admin' diterima (simple)
+
+  // hanya user 'admin' diterima
   if (u != String(DEFAULT_USER)) {
     addLog("Gagal login: user invalid " + u);
-    server.send(401, "text/plain", "Login gagal");
+    String html = "<script>alert('Login gagal: user salah');window.location='/login';</script>";
+    server.send(200, "text/html", html);
     return;
   }
+
   String h = sha256Hex(p);
   if (h == storedPassHash) {
-    // sukses => buat session token & set cookie
+    // sukses
     currentSessionToken = genSessionToken();
     isAuthenticated = true;
     addLog("Login berhasil via Web UI");
@@ -319,9 +322,11 @@ void handleDoLogin() {
     server.send(303);
   } else {
     addLog("Gagal login (password salah) user:" + u);
-    server.send(401, "text/plain", "Login gagal (password salah)");
+    String html = "<script>alert('Login gagal: password salah');window.location='/login';</script>";
+    server.send(200, "text/html", html);
   }
 }
+
 
 void handleLogout() {
   // hapus session in-memory & cookie
@@ -430,7 +435,7 @@ void handleRoot() {
   html += ".toprow{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center}";
   html += ".toprow .left{flex:1;text-align:left}";
   html += ".toprow .right{flex:1;text-align:right;font-size:0.9em}";
-  html += "a.btn{color:#fff;padding:8px 10px;border-radius:6px;text-decoration:none}";
+  html += "a.btn{color:#fff;padding:3px 10px;border-radius:6px;text-decoration:none}";
   html += "</style></head><body>";
 
   html += "<div class='toprow'><div class='left'><h2>🔑 ESP32 Keyless Emergency 🔑</h2></div>";
