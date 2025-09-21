@@ -694,11 +694,37 @@ void handleWifiPage() {
   html += "<button type='submit'>Simpan & Hubungkan</button>";
   html += "</form>";
   html += "<form action='/doClearWifi' method='GET' style='margin-top:12px;'><button type='submit'>Clear WiFi (hapus kredensial)</button></form>";
+  html += "<form action='/listWifi' method='GET' style='margin-top:12px;'><button type='submit'>List WiFi Tersimpan</button></form>";
   html += "<p><a href='/'>Kembali</a></p>";
   html += "</body></html>";
 
   server.send(200, "text/html", html);
 }
+
+// ================== HANDLER: List WiFi (tampil SSID tersimpan) ==================
+void handleListWifi() {
+  if (!requireAuth()) return;
+
+  preferences.begin("wifi", true);
+  String ssid = preferences.getString("ssid", "");
+  preferences.end();
+
+  String html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>";
+  html += "<title>WiFi List</title>";
+  html += "<style>body{font-family:Arial;padding:16px;} table{width:100%;border-collapse:collapse;} th,td{padding:8px;border-bottom:1px solid #ddd;} button{padding:8px;margin:6px;} </style></head><body>";
+  html += "<h2>SSID WiFi Tersimpan</h2>";
+  html += "<table><tr><th>No</th><th>SSID</th></tr>";
+  if (ssid.length() == 0) {
+    html += "<tr><td colspan='2'>(kosong)</td></tr>";
+  } else {
+    html += "<tr><td>1</td><td>" + ssid + "</td></tr>";
+  }
+  html += "</table>";
+  html += "<p><a href='/wifi'>Kembali</a></p></body></html>";
+
+  server.send(200, "text/html", html);
+}
+
 
 void handleDoWifiSave() {
   if (!requireAuth()) return;
@@ -824,6 +850,8 @@ void setup() {
   server.on("/doWifiSave", HTTP_GET, handleDoWifiSave);
   server.on("/doClearWifi", HTTP_GET, handleDoClearWifi);
   server.on("/scanNearestMac", handleScanNearestMac);
+  server.on("/listWifi", HTTP_GET, handleListWifi);
+
 
   server.begin();
   Serial.println("\n=== MODE SERIAL ===");
